@@ -1,134 +1,87 @@
-import streamlit as st
-import pandas as pd
+import streamlit as st, os, pandas as pd
 from auth import *
+from utils import generate_otp
+from database import init_db
 
-st.set_page_config("Retail Sales Dashboard", layout="wide")
+st.set_page_config(layout="wide")
+conn = init_db()
 
-# Ensure user DB table exists
-create_users_table()
+# Sessions
+if "step" not in st.session_state: st.session_state.step = "login"
+if "user" not in st.session_state: st.session_state.user = None
 
-# Initialize session state
-if "auth_status" not in st.session_state:
-    st.session_state.auth_status = False
-    st.session_state.username = ""
-    st.session_state.forgot_mode = False
-    st.session_state.show_login = True
-
-def logout():
-    st.session_state.auth_status = False
-    st.session_state.username = ""
-    st.session_state.show_login = True
-    st.rerun()
-
-def login_ui():
+def show_login():
     st.subheader("🔐 Login")
-    with st.form("login_form"):
-        username = st.text_input("Username", key="login_user")
-        password = st.text_input("Password", type="password", key="login_pass")
-        submit = st.form_submit_button("Login")
-        if submit:
-            if login_user(username, password):
-                st.session_state.auth_status = True
-                st.session_state.username = username
-                st.success("Login successful!")
-                st.rerun()
-            else:
-                st.error("Incorrect username or password.")
+    u = st.text_input("Username")
+    p = st.text_input("Password", type="password")
+    if st.button("Login") and login(u,p):
+        st.session_state.user = u
+    else: st.error("Login failed or not verified")
 
-    if st.button("Forgot Password?"):
-        st.session_state.forgot_mode = True
-        st.session_state.show_login = False
-        st.rerun()
+def show_signup():
+    st.subheader("📝 Sign Up")
+    u, p, e, cnum = st.text_input("Username"), st.text_input("Password", type="password"), st.text_input("Email"), st.text_input("Contact")
+    if st.button("Create"):
+        try:
+            add_user(u,p,e,cnum, is_admin=(len(list_all_users())==0))
+            st.success("OTP sent; please verify.")
+            st.session_state.step="verify"; st.session_state.temp_user=u
+        except Exception as ex:
+            st.error(ex)
 
-def signup_ui():
-    st.subheader("📝 Create an Account")
-    with st.form("signup_form"):
-        username = st.text_input("Choose Username", key="signup_user")
-        password = st.text_input("Choose Password", type="password", key="signup_pass")
-        email = st.text_input("Email")
-        contact = st.text_input("Contact Number")
-        submit = st.form_submit_button("Sign Up")
-        if submit:
-            try:
-                add_user(username, password, email, contact)
-                st.success("Account created! Please log in.")
-                st.session_state.show_login = True
-                st.rerun()
-            except ValueError as e:
-                st.error(str(e))
+def show_verify():
+    st.subheader("🔁 Enter OTP")
+    otp = st.text_input("OTP")
+    if st.button("Verify") and verify_otp(st.session_state.temp_user, otp):
+        st.success("Verified. Please login.")
+        st.session_state.step="login"
+    else:
+        st.error("Wrong OTP")
 
-def forgot_password_ui():
-    st.subheader("🔁 Recover Password")
-    with st.form("recover_form"):
-        username = st.text_input("Username")
-        email = st.text_input("Email")
-        contact = st.text_input("Contact Number")
-        new_password = st.text_input("New Password", type="password")
-        submit = st.form_submit_button("Reset Password")
-        if submit:
-            if validate_recovery(username, email, contact):
-                reset_password(username, new_password)
-                st.success("Password reset. Please log in.")
-                st.session_state.forgot_mode = False
-                st.session_state.show_login = True
-                st.rerun()
-            else:
-                st.error("Details not matched. Try again.")
-
-def welcome_screen():
-    st.markdown("""
-    <div style='text-align:center'>
-        <h1>🛍️ Welcome to the Retail Sales Dashboard</h1>
-        <p>Upload your sales data and uncover insights</p>
-        <img src='https://cdn-icons-png.flaticon.com/512/1170/1170576.png' width='100'/>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ---------- APP LOGIC ----------
-
-if not st.session_state.auth_status:
-    welcome_screen()
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.session_state.forgot_mode:
-            forgot_password_ui()
-        elif st.session_state.show_login:
-            login_ui()
-    with col2:
-        if not st.session_state.forgot_mode:
-            signup_ui()
+# Initial
+if not st.session_state.user:
+    st.title("Welcome to Retail Dashboard")
+    if st.session_state.step=="login": show_login()
+    elif st.session_state.step=="signup": show_signup()
+    else: show_verify()
+    if st.button("Go to Sign Up") and st.session_state.step!="signup": st.session_state.step="signup"
     st.stop()
 
-# -------- MAIN DASHBOARD --------
-
-st.sidebar.success(f"Welcome, {st.session_state.username} 👋")
+# Authenticated Section
+u = st.session_state.user
+st.sidebar.write(f"Hello, {u}")
 if st.sidebar.button("Logout"):
-    logout()
+    st.session_state.user=None; st.session_state.step="login"; st.experimental_rerun()
 
-st.title("📊 Retail Sales Dashboard")
-uploaded_file = st.sidebar.file_uploader("Upload Sales CSV", type=["csv"])
-if uploaded_file:
-    try:
-        df = pd.read_csv(uploaded_file, encoding="utf-8")
-    except:
-        df = pd.read_csv(uploaded_file, encoding="latin1")
+role = get_role(u)
+st.title(f"{role.title()} Dashboard")
 
-    st.write("🔎 Preview of Uploaded Data:")
-    st.dataframe(df.head())
+# File Upload on main screen
+uploaded = st.file_uploader("Upload CSV", type="csv")
+if uploaded:
+    os.makedirs("uploads", exist_ok=True)
+    fname = os.path.join("uploads", u + "_" + uploaded.name)
+    with open(fname, "wb") as f: f.write(uploaded.getbuffer())
+    import datetime; from auth import save_file
+    save_file(u, fname)
+    st.success("Saved!")
+    df = pd.read_csv(fname)
+    st.dataframe(df)
+    # simple charts:
+    if "revenue" in df.columns and "date" in df.columns:
+        df["date"]=pd.to_datetime(df["date"])
+        st.line_chart(df.groupby("date")["revenue"].sum())
 
-    if "date" in df.columns:
-        try:
-            df["date"] = pd.to_datetime(df["date"])
-            st.subheader("📈 Sales Over Time")
-            sales = df.groupby("date")["revenue"].sum().reset_index()
-            st.line_chart(sales.set_index("date"))
-        except:
-            st.warning("Couldn't convert 'date' column.")
+# Viewing history
+st.subheader("My Uploads")
+for f, ts in list_user_files(u):
+    st.write(f"{f} @ {ts}")
 
-    if "region" in df.columns:
-        st.subheader("🌍 Revenue by Region")
-        region_data = df.groupby("region")["revenue"].sum()
-        st.bar_chart(region_data)
-
-else:
-    st.info("Please upload a CSV file to view insights.")
+# Admin panel
+if role=="admin":
+    st.subheader("All Users")
+    for user in list_all_users(): st.write("-", user)
+    st.subheader("All Uploads")
+    from auth import conn
+    for un, fname, ts in conn.execute("SELECT username,filename,uploaded_at FROM files"):
+        st.write(un, fname, ts)
