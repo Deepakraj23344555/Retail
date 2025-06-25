@@ -7,6 +7,7 @@ def make_hash(password):
 def create_users_table():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
+    c.execute("DROP TABLE IF EXISTS users")  # Reset for clean start
     c.execute('''CREATE TABLE IF NOT EXISTS users (
                     username TEXT PRIMARY KEY,
                     password TEXT,
@@ -32,14 +33,6 @@ def login_user(username, password):
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, make_hash(password)))
     result = c.fetchall()
-    conn.close()
-    return result
-
-def get_user_info(username):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT email, contact_number FROM users WHERE username=?", (username,))
-    result = c.fetchone()
     conn.close()
     return result
 
