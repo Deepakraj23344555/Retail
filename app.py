@@ -4,7 +4,7 @@ from auth import *
 
 st.set_page_config("Retail Sales Dashboard", layout="wide")
 
-# Call once to ensure DB exists
+# Ensure user DB table exists
 create_users_table()
 
 # Initialize session state
@@ -18,7 +18,7 @@ def logout():
     st.session_state.auth_status = False
     st.session_state.username = ""
     st.session_state.show_login = True
-    st.experimental_rerun()
+    st.rerun()
 
 def login_ui():
     st.subheader("🔐 Login")
@@ -31,14 +31,14 @@ def login_ui():
                 st.session_state.auth_status = True
                 st.session_state.username = username
                 st.success("Login successful!")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Incorrect username or password.")
 
     if st.button("Forgot Password?"):
         st.session_state.forgot_mode = True
         st.session_state.show_login = False
-        st.experimental_rerun()
+        st.rerun()
 
 def signup_ui():
     st.subheader("📝 Create an Account")
@@ -53,7 +53,7 @@ def signup_ui():
                 add_user(username, password, email, contact)
                 st.success("Account created! Please log in.")
                 st.session_state.show_login = True
-                st.experimental_rerun()
+                st.rerun()
             except ValueError as e:
                 st.error(str(e))
 
@@ -71,7 +71,7 @@ def forgot_password_ui():
                 st.success("Password reset. Please log in.")
                 st.session_state.forgot_mode = False
                 st.session_state.show_login = True
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Details not matched. Try again.")
 
@@ -79,7 +79,7 @@ def welcome_screen():
     st.markdown("""
     <div style='text-align:center'>
         <h1>🛍️ Welcome to the Retail Sales Dashboard</h1>
-        <p>Analyze and visualize your sales performance with ease.</p>
+        <p>Upload your sales data and uncover insights</p>
         <img src='https://cdn-icons-png.flaticon.com/512/1170/1170576.png' width='100'/>
     </div>
     """, unsafe_allow_html=True)
