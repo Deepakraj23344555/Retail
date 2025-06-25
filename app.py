@@ -1,120 +1,145 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from database import init_db
+from auth import create_users_table, add_user, login_user, reset_password, validate_recovery
 from utils import insert_sales_data, fetch_sales_data, get_kpis
-from auth import create_users_table, add_user, login_user, view_all_users
+from database import init_db
+import plotly.express as px
 
-# Init
-init_db()
+# Setup
+st.set_page_config("Retail Dashboard", layout="wide")
 create_users_table()
+init_db()
 
-# Session Setup
+# Session Init
 if "auth_status" not in st.session_state:
     st.session_state["auth_status"] = False
-if "username" not in st.session_state:
     st.session_state["username"] = ""
+    st.session_state["forgot_mode"] = False
 
-# Auth Section
-if not st.session_state["auth_status"]:
-    menu = st.sidebar.selectbox("Menu", ["Login", "Sign Up"])
-    if menu == "Login":
-        st.sidebar.subheader("Login")
-        username = st.sidebar.text_input("Username")
-        password = st.sidebar.text_input("Password", type="password")
-        if st.sidebar.button("Login"):
+def logout():
+    st.session_state["auth_status"] = False
+    st.session_state["username"] = ""
+    st.session_state["forgot_mode"] = False
+    st.rerun()
+
+def login_ui():
+    with st.form("login_form"):
+        st.subheader("🔐 Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Login")
+        if submitted:
             user = login_user(username, password)
             if user:
                 st.session_state["auth_status"] = True
                 st.session_state["username"] = username
-                st.sidebar.success(f"Welcome, {username}!")
+                st.success("Login successful!")
                 st.rerun()
             else:
-                st.sidebar.error("Invalid credentials.")
-    elif menu == "Sign Up":
-        st.sidebar.subheader("Create Account")
-        new_user = st.sidebar.text_input("New Username")
-        new_pass = st.sidebar.text_input("New Password", type="password")
-        if st.sidebar.button("Register"):
+                st.error("Invalid credentials.")
+
+    if st.button("Forgot Password?"):
+        st.session_state["forgot_mode"] = True
+        st.rerun()
+
+def signup_ui():
+    with st.form("signup_form"):
+        st.subheader("📝 Sign Up")
+        username = st.text_input("New Username")
+        password = st.text_input("New Password", type="password")
+        email = st.text_input("Email")
+        contact = st.text_input("Contact Number")
+        if st.form_submit_button("Register"):
             try:
-                add_user(new_user, new_pass)
-                st.sidebar.success("Account created. Please login.")
+                add_user(username, password, email, contact)
+                st.success("Account created. Please login.")
                 st.rerun()
             except ValueError as e:
-                st.sidebar.error(str(e))
-    st.stop()
+                st.error(str(e))
 
-# Logout
-if st.sidebar.button("Logout"):
-    st.session_state["auth_status"] = False
-    st.session_state["username"] = ""
-    st.rerun()
+def forgot_password_ui():
+    st.subheader("🔁 Recover Password")
+    username = st.text_input("Username")
+    email = st.text_input("Registered Email")
+    contact = st.text_input("Contact Number")
+    new_pass = st.text_input("New Password", type="password")
+    if st.button("Reset Password"):
+        if validate_recovery(username, email, contact):
+            reset_password(username, new_pass)
+            st.success("Password reset. Please log in.")
+            st.session_state["forgot_mode"] = False
+            st.rerun()
+        else:
+            st.error("Details do not match.")
+
+def creative_welcome():
+    st.markdown("""
+    <div style='text-align:center'>
+        <h1>Welcome to the 🛒 Retail Sales Intelligence Dashboard</h1>
+        <p>Analyze your sales data, explore trends, and make data-driven decisions.</p>
+        <img src='https://cdn-icons-png.flaticon.com/512/1170/1170576.png' width='150'/>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Main App
-st.set_page_config(page_title="Retail Dashboard", layout="wide")
+if not st.session_state["auth_status"]:
+    creative_welcome()
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.session_state["forgot_mode"]:
+            forgot_password_ui()
+        else:
+            login_ui()
+    with col2:
+        signup_ui()
+    st.stop()
+
+# Logged-in UI
+st.sidebar.success(f"Welcome, {st.session_state['username']}")
+if st.sidebar.button("Logout"):
+    logout()
+
 st.title("📊 Retail Sales Dashboard")
-st.write(f"Logged in as: **{st.session_state['username']}**")
 
-# Admin Panel
-if st.session_state["username"] == "admin":
-    st.subheader("Registered Users")
-    users = view_all_users()
-    st.dataframe(pd.DataFrame(users, columns=["Username"]))
-
-# Upload Section
-st.sidebar.subheader("Upload CSV File")
-uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
-
+uploaded_file = st.sidebar.file_uploader("Upload CSV", type="csv")
 if uploaded_file:
     try:
-        df_upload = pd.read_csv(uploaded_file, encoding="utf-8")
+        df = pd.read_csv(uploaded_file, encoding="utf-8")
     except UnicodeDecodeError:
-        df_upload = pd.read_csv(uploaded_file, encoding="latin1")
-    st.subheader("Uploaded Data Preview")
-    st.write(df_upload.head())
+        df = pd.read_csv(uploaded_file, encoding="latin1")
+    st.write("Uploaded Preview:", df.head())
     try:
-        insert_sales_data(df_upload)
-        st.success("✅ Data uploaded successfully.")
+        insert_sales_data(df)
+        st.success("Uploaded and saved to database!")
     except Exception as e:
-        st.error(f"❌ Upload Error: {e}")
+        st.error(f"Upload error: {e}")
 
-# Dashboard
 df = fetch_sales_data()
 if df.empty:
-    st.warning("No data found. Please upload CSV.")
+    st.warning("No sales data available. Please upload.")
     st.stop()
 
 df["date"] = pd.to_datetime(df["date"])
-
-# Filters
 st.sidebar.subheader("Filters")
 region = st.sidebar.selectbox("Region", ["All"] + sorted(df["region"].dropna().unique()))
-start_date = st.sidebar.date_input("Start Date", df["date"].min().date())
-end_date = st.sidebar.date_input("End Date", df["date"].max().date())
-filtered = df[(df["date"].dt.date >= start_date) & (df["date"].dt.date <= end_date)]
+start = st.sidebar.date_input("Start Date", df["date"].min().date())
+end = st.sidebar.date_input("End Date", df["date"].max().date())
+
+filtered = df[(df["date"].dt.date >= start) & (df["date"].dt.date <= end)]
 if region != "All":
     filtered = filtered[filtered["region"] == region]
 
-# KPIs
-st.subheader("Key Metrics")
-rev, units, avg_price = get_kpis(filtered)
+revenue, units, avg_price = get_kpis(filtered)
 col1, col2, col3 = st.columns(3)
-col1.metric("Total Revenue", f"${rev:,.2f}")
-col2.metric("Units Sold", f"{units}")
-col3.metric("Avg Unit Price", f"${avg_price:.2f}")
+col1.metric("Revenue", f"${revenue:,.2f}")
+col2.metric("Units Sold", units)
+col3.metric("Avg Price", f"${avg_price:.2f}")
 
-# Charts
-st.subheader("Revenue Over Time")
-trend = filtered.groupby("date")["revenue"].sum().reset_index()
-fig1 = px.line(trend, x="date", y="revenue", title="Daily Revenue Trend")
-st.plotly_chart(fig1, use_container_width=True)
+st.subheader("📈 Revenue Trend")
+fig = px.line(filtered.groupby("date")["revenue"].sum().reset_index(), x="date", y="revenue")
+st.plotly_chart(fig, use_container_width=True)
 
-st.subheader("Top Products by Revenue")
-top_products = filtered.groupby("product_id")["revenue"].sum().reset_index().nlargest(5, "revenue")
-fig2 = px.bar(top_products, x="product_id", y="revenue", title="Top 5 Products")
+st.subheader("🔥 Top Products")
+top = filtered.groupby("product_id")["revenue"].sum().reset_index().nlargest(5, "revenue")
+fig2 = px.bar(top, x="product_id", y="revenue", title="Top Products by Revenue")
 st.plotly_chart(fig2, use_container_width=True)
-
-# Download
-st.subheader("Download Filtered Data")
-csv = filtered.to_csv(index=False).encode("utf-8")
-st.download_button("Download CSV", csv, "filtered_sales.csv", "text/csv")
