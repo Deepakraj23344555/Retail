@@ -1,87 +1,109 @@
-import streamlit as st, os, pandas as pd
-from auth import *
-from utils import generate_otp
-from database import init_db
+import streamlit as st
+import pandas as pd
+import auth
+import random
 
-st.set_page_config(layout="wide")
-conn = init_db()
+st.set_page_config("Retail Dashboard", layout="wide")
 
-# Sessions
-if "step" not in st.session_state: st.session_state.step = "login"
-if "user" not in st.session_state: st.session_state.user = None
+if "page" not in st.session_state: st.session_state.page = "home"
+if "username" not in st.session_state: st.session_state.username = None
+if "otp" not in st.session_state: st.session_state.otp = None
+if "reset_user" not in st.session_state: st.session_state.reset_user = None
 
-def show_login():
+def home_ui():
+    st.title("🛍️ Welcome to Retail Dashboard")
+    st.markdown("### Empowering businesses with real-time insights 🔍")
+    st.image("https://source.unsplash.com/800x300/?retail,data,analytics", use_column_width=True)
+    if st.button("Login"): st.session_state.page = "login"
+    if st.button("Sign Up"): st.session_state.page = "signup"
+    if st.button("Forgot Password"): st.session_state.page = "reset"
+
+def login_ui():
     st.subheader("🔐 Login")
     u = st.text_input("Username")
     p = st.text_input("Password", type="password")
-    if st.button("Login") and login(u,p):
-        st.session_state.user = u
-    else: st.error("Login failed or not verified")
+    if st.button("Login"):
+        if auth.login(u, p):
+            st.session_state.username = u
+            st.success("Login successful")
+            st.session_state.page = "dashboard"
+            st.rerun()
+        else:
+            st.error("Login failed or not verified")
+    st.button("Go to Sign Up", on_click=lambda: st.session_state.update(page="signup"))
 
-def show_signup():
+def signup_ui():
     st.subheader("📝 Sign Up")
-    u, p, e, cnum = st.text_input("Username"), st.text_input("Password", type="password"), st.text_input("Email"), st.text_input("Contact")
-    if st.button("Create"):
-        try:
-            add_user(u,p,e,cnum, is_admin=(len(list_all_users())==0))
-            st.success("OTP sent; please verify.")
-            st.session_state.step="verify"; st.session_state.temp_user=u
-        except Exception as ex:
-            st.error(ex)
+    u = st.text_input("Username")
+    p = st.text_input("Password", type="password")
+    e = st.text_input("Email")
+    c = st.text_input("Contact Number")
+    if st.button("Sign Up"):
+        if auth.user_exists(u):
+            st.error("Username already exists")
+        else:
+            auth.add_user(u, p, e, c)
+            st.session_state.otp = str(random.randint(100000, 999999))
+            st.session_state.username = u
+            st.session_state.page = "verify"
+            st.rerun()
 
-def show_verify():
-    st.subheader("🔁 Enter OTP")
-    otp = st.text_input("OTP")
-    if st.button("Verify") and verify_otp(st.session_state.temp_user, otp):
-        st.success("Verified. Please login.")
-        st.session_state.step="login"
-    else:
-        st.error("Wrong OTP")
+def verify_ui():
+    st.subheader("📧 Enter OTP to Verify")
+    st.info(f"Your OTP is: **{st.session_state.otp}**")  # You should send via email/SMS in real app
+    otp_input = st.text_input("Enter OTP")
+    if st.button("Verify"):
+        if otp_input == st.session_state.otp:
+            auth.verify_user(st.session_state.username)
+            st.success("Account verified! Please login.")
+            st.session_state.page = "login"
+            st.rerun()
+        else:
+            st.error("Invalid OTP")
 
-# Initial
-if not st.session_state.user:
-    st.title("Welcome to Retail Dashboard")
-    if st.session_state.step=="login": show_login()
-    elif st.session_state.step=="signup": show_signup()
-    else: show_verify()
-    if st.button("Go to Sign Up") and st.session_state.step!="signup": st.session_state.step="signup"
-    st.stop()
+def reset_ui():
+    st.subheader("🔑 Reset Password")
+    info = st.text_input("Enter email or contact number")
+    if st.button("Send OTP"):
+        user = auth.get_user_by_contact_email(info)
+        if user:
+            st.session_state.otp = str(random.randint(100000, 999999))
+            st.session_state.reset_user = user
+            st.success(f"OTP sent: {st.session_state.otp}")
+        else:
+            st.error("User not found")
+    otp = st.text_input("Enter OTP")
+    new_p = st.text_input("New Password", type="password")
+    if st.button("Reset Password"):
+        if otp == st.session_state.otp:
+            auth.update_password(st.session_state.reset_user, new_p)
+            st.success("Password updated. Please login.")
+            st.session_state.page = "login"
+            st.rerun()
+        else:
+            st.error("Wrong OTP")
 
-# Authenticated Section
-u = st.session_state.user
-st.sidebar.write(f"Hello, {u}")
-if st.sidebar.button("Logout"):
-    st.session_state.user=None; st.session_state.step="login"; st.experimental_rerun()
+def dashboard_ui():
+    st.subheader(f"📊 Welcome, {st.session_state.username}")
+    uploaded = st.file_uploader("Upload CSV file", type=["csv"])
+    if uploaded:
+        df = pd.read_csv(uploaded, encoding="latin-1")
+        st.write("Data Preview", df.head())
+        auth.save_upload(st.session_state.username, uploaded.name)
+    st.markdown("### 📁 Upload History")
+    rows = auth.get_uploads(st.session_state.username)
+    for r in rows:
+        st.markdown(f"**{r[2]}** - *{r[3]}*")
 
-role = get_role(u)
-st.title(f"{role.title()} Dashboard")
+    if auth.is_admin(st.session_state.username):
+        st.success("🛠️ Admin Access Enabled")
+    st.button("Logout", on_click=lambda: st.session_state.update(username=None, page="home"))
 
-# File Upload on main screen
-uploaded = st.file_uploader("Upload CSV", type="csv")
-if uploaded:
-    os.makedirs("uploads", exist_ok=True)
-    fname = os.path.join("uploads", u + "_" + uploaded.name)
-    with open(fname, "wb") as f: f.write(uploaded.getbuffer())
-    import datetime; from auth import save_file
-    save_file(u, fname)
-    st.success("Saved!")
-    df = pd.read_csv(fname)
-    st.dataframe(df)
-    # simple charts:
-    if "revenue" in df.columns and "date" in df.columns:
-        df["date"]=pd.to_datetime(df["date"])
-        st.line_chart(df.groupby("date")["revenue"].sum())
-
-# Viewing history
-st.subheader("My Uploads")
-for f, ts in list_user_files(u):
-    st.write(f"{f} @ {ts}")
-
-# Admin panel
-if role=="admin":
-    st.subheader("All Users")
-    for user in list_all_users(): st.write("-", user)
-    st.subheader("All Uploads")
-    from auth import conn
-    for un, fname, ts in conn.execute("SELECT username,filename,uploaded_at FROM files"):
-        st.write(un, fname, ts)
+# App flow
+page = st.session_state.page
+if page == "home": home_ui()
+elif page == "login": login_ui()
+elif page == "signup": signup_ui()
+elif page == "verify": verify_ui()
+elif page == "reset": reset_ui()
+elif page == "dashboard": dashboard_ui()
