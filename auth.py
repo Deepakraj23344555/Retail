@@ -1,54 +1,46 @@
-import sqlite3
-import hashlib
+import hashlib, datetime
+from database import init_db
+from utils import generate_otp, send_otp_via_email
 
-def make_hash(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+conn = init_db()
+c = conn.cursor()
+otp_store = {}  # temp: username → otp
 
-def create_users_table():
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        username TEXT PRIMARY KEY,
-        password TEXT,
-        email TEXT,
-        contact_number TEXT
-    )''')
+def make_hash(p): return hashlib.sha256(p.encode()).hexdigest()
+
+def add_user(u, p, e, contact, is_admin=False):
+    c.execute('SELECT * FROM users WHERE username=?', (u,))
+    if c.fetchone(): raise ValueError("Username exists")
+    role = 'admin' if is_admin else 'user'
+    c.execute('INSERT INTO users VALUES (?,?,?,?,?,?)',
+      (u, make_hash(p), e, contact, role, 0))
     conn.commit()
-    conn.close()
+    otp = generate_otp(); otp_store[u] = otp
+    send_otp_via_email(e, otp)
 
-def add_user(username, password, email, contact):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username=?", (username,))
-    if c.fetchone():
-        conn.close()
-        raise ValueError("Username already exists.")
-    c.execute("INSERT INTO users (username, password, email, contact_number) VALUES (?, ?, ?, ?)",
-              (username, make_hash(password), email, contact))
+def verify_otp(u, otp):
+    if otp_store.get(u) == otp:
+        c.execute('UPDATE users SET is_verified=1 WHERE username=?', (u,))
+        conn.commit()
+        return True
+    return False
+
+def login(u, p):
+    c.execute('SELECT password,is_verified FROM users WHERE username=?', (u,))
+    res = c.fetchone()
+    return res and res[0]==make_hash(p) and res[1]==1
+
+def get_role(u):
+    c.execute('SELECT role FROM users WHERE username=?', (u,))
+    return c.fetchone()[0]
+
+def save_file(u, fname):
+    c.execute('INSERT INTO files(username,filename,uploaded_at) VALUES (?,?,?)',
+              (u, fname, datetime.datetime.now().isoformat()))
     conn.commit()
-    conn.close()
 
-def login_user(username, password):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username=? AND password=?",
-              (username, make_hash(password)))
-    result = c.fetchone()
-    conn.close()
-    return result is not None
+def list_user_files(u):
+    c.execute('SELECT filename, uploaded_at FROM files WHERE username=?', (u,))
+    return c.fetchall()
 
-def reset_password(username, new_password):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("UPDATE users SET password=? WHERE username=?", (make_hash(new_password), username))
-    conn.commit()
-    conn.close()
-
-def validate_recovery(username, email, contact):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username=? AND email=? AND contact_number=?",
-              (username, email, contact))
-    result = c.fetchone()
-    conn.close()
-    return result is not None
+def list_all_users(): return [row[0] for row in c.execute('SELECT username FROM users')]
