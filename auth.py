@@ -47,7 +47,8 @@ def reset_password(username, new_password):
 def validate_recovery(username, email, contact):
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username=? AND email=? AND contact_number=?", (username, email, contact))
+    c.execute("SELECT * FROM users WHERE username=? AND email=? AND contact_number=?",
+              (username, email, contact))
     result = c.fetchone()
     conn.close()
     return result is not None
