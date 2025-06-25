@@ -1,16 +1,12 @@
-# utils.py
 import sqlite3
 import pandas as pd
 
 def insert_sales_data(df):
-    expected_cols = [
-        'date', 'store_id', 'product_id', 'quantity_sold',
-        'unit_price', 'revenue', 'region'
-    ]
-    df = df[[col for col in df.columns if col in expected_cols]]
-    missing = [col for col in expected_cols if col not in df.columns]
+    expected = ['date', 'store_id', 'product_id', 'quantity_sold', 'unit_price', 'revenue', 'region']
+    df = df[[col for col in df.columns if col in expected]]
+    missing = [col for col in expected if col not in df.columns]
     if missing:
-        raise ValueError(f"Missing columns in uploaded file: {', '.join(missing)}")
+        raise ValueError(f"Missing columns: {', '.join(missing)}")
 
     conn = sqlite3.connect("retail_data.db")
     df.to_sql("sales_data", conn, if_exists="append", index=False)
@@ -23,7 +19,4 @@ def fetch_sales_data():
     return df
 
 def get_kpis(df):
-    total_revenue = df["revenue"].sum()
-    total_units = df["quantity_sold"].sum()
-    avg_unit_price = df["unit_price"].mean()
-    return total_revenue, total_units, avg_unit_price
+    return df["revenue"].sum(), df["quantity_sold"].sum(), df["unit_price"].mean()
