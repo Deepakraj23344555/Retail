@@ -2,12 +2,12 @@ import sqlite3
 import pandas as pd
 
 def insert_sales_data(df):
-    expected = ['date', 'store_id', 'product_id', 'quantity_sold', 'unit_price', 'revenue', 'region']
-    df = df[[col for col in df.columns if col in expected]]
-    missing = [col for col in expected if col not in df.columns]
-    if missing:
+    required_cols = ['date', 'store_id', 'product_id', 'quantity_sold', 'unit_price', 'revenue', 'region']
+    if not all(col in df.columns for col in required_cols):
+        missing = [col for col in required_cols if col not in df.columns]
         raise ValueError(f"Missing columns: {', '.join(missing)}")
 
+    df = df[required_cols]
     conn = sqlite3.connect("retail_data.db")
     df.to_sql("sales_data", conn, if_exists="append", index=False)
     conn.close()
