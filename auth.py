@@ -15,6 +15,10 @@ def create_users_table():
 def add_user(username, password):
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
+    c.execute('SELECT * FROM users WHERE username = ?', (username,))
+    if c.fetchone():
+        conn.close()
+        raise ValueError("Username already exists. Please choose another.")
     c.execute('INSERT INTO users(username, password) VALUES (?, ?)', (username, make_hash(password)))
     conn.commit()
     conn.close()
@@ -23,6 +27,14 @@ def login_user(username, password):
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, make_hash(password)))
+    data = c.fetchall()
+    conn.close()
+    return data
+
+def view_all_users():
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('SELECT username FROM users')
     data = c.fetchall()
     conn.close()
     return data
