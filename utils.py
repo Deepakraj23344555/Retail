@@ -7,16 +7,11 @@ def insert_sales_data(df):
         'date', 'store_id', 'product_id', 'quantity_sold',
         'unit_price', 'revenue', 'region'
     ]
-
-    # Only keep expected columns
     df = df[[col for col in df.columns if col in expected_cols]]
-
-    # Ensure all expected columns are present
     missing = [col for col in expected_cols if col not in df.columns]
     if missing:
         raise ValueError(f"Missing columns in uploaded file: {', '.join(missing)}")
 
-    # Insert into database
     conn = sqlite3.connect("retail_data.db")
     df.to_sql("sales_data", conn, if_exists="append", index=False)
     conn.close()
