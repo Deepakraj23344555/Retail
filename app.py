@@ -33,7 +33,7 @@ if menu == "Login":
             st.session_state["auth_status"] = True
             st.session_state["username"] = username
             st.sidebar.success(f"✅ Logged in as {username}")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.sidebar.error("❌ Incorrect username or password")
 
@@ -45,7 +45,7 @@ elif menu == "Sign Up":
         try:
             add_user(new_user, new_pass)
             st.sidebar.success("🎉 Account created! Please login.")
-            st.experimental_rerun()
+            st.rerun()
         except ValueError as ve:
             st.sidebar.error(f"❌ {ve}")
 
@@ -53,7 +53,7 @@ elif menu == "Logout":
     st.session_state["auth_status"] = False
     st.session_state["username"] = ""
     st.success("You have been logged out.")
-    st.experimental_rerun()
+    st.rerun()
 
 if not st.session_state["auth_status"]:
     st.warning("🔒 Please login to access the dashboard.")
