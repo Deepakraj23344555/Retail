@@ -1,10 +1,9 @@
-# database.py
 import sqlite3
 
 def init_db():
     conn = sqlite3.connect('retail_data.db')
-    cursor = conn.cursor()
-    cursor.execute('''
+    c = conn.cursor()
+    c.execute('''
         CREATE TABLE IF NOT EXISTS sales_data (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT,
