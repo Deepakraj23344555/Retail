@@ -1,4 +1,3 @@
-# auth.py
 import sqlite3
 import hashlib
 
@@ -18,7 +17,7 @@ def add_user(username, password):
     c.execute('SELECT * FROM users WHERE username = ?', (username,))
     if c.fetchone():
         conn.close()
-        raise ValueError("Username already exists. Please choose another.")
+        raise ValueError("Username already exists.")
     c.execute('INSERT INTO users(username, password) VALUES (?, ?)', (username, make_hash(password)))
     conn.commit()
     conn.close()
