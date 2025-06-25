@@ -17,5 +17,6 @@ def init_db():
             region TEXT
         )
     ''')
+
     conn.commit()
     conn.close()
