@@ -4,7 +4,6 @@ import sqlite3
 def init_db():
     conn = sqlite3.connect('retail_data.db')
     cursor = conn.cursor()
-
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS sales_data (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,6 +16,5 @@ def init_db():
             region TEXT
         )
     ''')
-
     conn.commit()
     conn.close()
