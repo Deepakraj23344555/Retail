@@ -1,0 +1,4 @@
+date,store_id,product_id,quantity_sold,unit_price,revenue,region
+2025-06-01,101,201,10,50,500,North
+2025-06-01,102,202,5,100,500,South
+2025-06-02,101,201,8,50,400,North
