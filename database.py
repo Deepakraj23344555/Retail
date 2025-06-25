@@ -1,19 +1,16 @@
 import sqlite3
-
 def init_db():
-    conn = sqlite3.connect('retail_data.db')
+    conn = sqlite3.connect('database.db', check_same_thread=False)
     c = conn.cursor()
     c.execute('''
-        CREATE TABLE IF NOT EXISTS sales_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT,
-            store_id INTEGER,
-            product_id INTEGER,
-            quantity_sold INTEGER,
-            unit_price REAL,
-            revenue REAL,
-            region TEXT
-        )
-    ''')
+      CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY, password TEXT,
+        email TEXT, contact TEXT, role TEXT, is_verified INTEGER
+      )''')
+    c.execute('''
+      CREATE TABLE IF NOT EXISTS files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT, filename TEXT, uploaded_at TEXT
+      )''')
     conn.commit()
-    conn.close()
+    return conn
